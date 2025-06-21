@@ -53,8 +53,8 @@ jobs:
         context: .
         push: true
         tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/aurifi-backend:latest
-          ${{ secrets.DOCKERHUB_USERNAME }}/aurifi-backend:${{ github.sha }}
+          ${{ secrets.DOCKERHUB_USERNAME }}/dev-aurifi-backend:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/dev-aurifi-backend:${{ github.sha }}
 
     - name: Deploy to server
       uses: appleboy/ssh-action@v1.0.3
@@ -67,7 +67,7 @@ jobs:
           cd /opt/aurifi
           
           echo "🔄 Pulling latest backend image..."
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/aurifi-backend:latest
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/dev-aurifi-backend:latest
           
           echo "🔄 Updating backend service..."
           docker compose up -d --no-deps backend

@@ -5,6 +5,7 @@ from app.models.system_transaction_columns import SystemTransactionColumnModel
 from app.utils.logger import logger
 from app.models.asset_class_model import AssetClassModel
 
+
 system_column_model = SystemColumnModel()
 system_transaction_column_model = SystemTransactionColumnModel()
 asset_class_model = AssetClassModel()
