@@ -25,7 +25,7 @@ def create_app():
 
     # Enhanced CORS configuration for Docker deployment
     # Get allowed origins from environment variable or use defaults
-    allowed_origins = os.getenv("CORS_ORIGINS", "http://165.22.214.208,http://165.22.214.208:3000,http://localhost:5173,http://localhost:5174").split(",")
+    allowed_origins = os.getenv("CORS_ORIGINS", "http://139.59.26.29,http://139.59.26.29:3000,http://localhost:5173,http://localhost:5174").split(",")
     
     CORS(app, 
          origins=allowed_origins,
