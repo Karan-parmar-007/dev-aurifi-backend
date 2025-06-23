@@ -163,6 +163,12 @@ def update_column_names():
         
         transaction_model.update_transaction(transaction_id, update_fields)
         
+        # NEW: Mark column mapping as complete
+        transaction_model.update_step_status(transaction_id, "column_mapping_done", True)
+        transaction_model.update_temp_step_status(transaction_id, "column_mapping_in_progress", False)
+        transaction_model.update_current_step(transaction_id, "datatype_conversion")
+
+
         return jsonify({
             "status": "success",
             "message": "Column names updated successfully",
@@ -301,6 +307,9 @@ def start_datatype_conversion_temp():
             "temp_changing_datatype_of_column": temp_version_id
         }
         transaction_model.update_transaction(transaction_id, update_fields)
+
+        transaction_model.update_temp_step_status(transaction_id, "datatype_conversion_in_progress", True)
+
         
         return jsonify({
             "status": "success",
@@ -1612,6 +1621,10 @@ def after_datatype_conversion_send_temp_to_main():
             # REMOVED: "are_all_steps_complete": True  # Don't set this here
         }
         transaction_model.update_transaction(transaction_id, update_fields)
+
+        transaction_model.update_step_status(transaction_id, "datatype_conversion_done", True)
+        transaction_model.update_temp_step_status(transaction_id, "datatype_conversion_in_progress", False)
+        transaction_model.update_current_step(transaction_id, "add_fields")
         
         return jsonify({
             "status": "success",
@@ -1774,6 +1787,9 @@ def start_process_of_creating_new_columns():
         }
         transaction_model.update_transaction(transaction_id, update_fields)
         
+        transaction_model.update_temp_step_status(transaction_id, "new_fields_in_progress", True)
+
+
         return jsonify({
             "status": "success",
             "message": "Temporary new column file created",
@@ -1854,6 +1870,10 @@ def temp_to_final_adding_new_column():
             # "are_all_steps_complete": True  # Update this based on your workflow
         }
         transaction_model.update_transaction(transaction_id, update_fields)
+
+        transaction_model.update_step_status(transaction_id, "new_fields_added", True)
+        transaction_model.update_temp_step_status(transaction_id, "new_fields_in_progress", False)
+        transaction_model.update_current_step(transaction_id, "rbi_rules")
         
         return jsonify({
             "status": "success",
@@ -2022,6 +2042,9 @@ def start_applying_rbi_rules():
             "temp_rbi_rules_applied": temp_version_id
         }
         transaction_model.update_transaction(transaction_id, update_fields)
+
+        transaction_model.update_temp_step_status(transaction_id, "rbi_rules_in_progress", True)
+
         
         return jsonify({
             "status": "success",
@@ -2666,6 +2689,10 @@ def save_rbi_rules_applied_temp_to_final():
         }
         transaction_model.update_transaction(transaction_id, update_fields)
         
+        transaction_model.update_step_status(transaction_id, "rbi_rules_applied", True)
+        transaction_model.update_temp_step_status(transaction_id, "rbi_rules_in_progress", False)
+        transaction_model.update_current_step(transaction_id, "rule_versions")
+
         return jsonify({
             "status": "success",
             "message": "RBI rules finalized",
@@ -2874,6 +2901,9 @@ def create_new_version_and_apply_rule():
         success = transaction_model.add_rule_application_root_version(transaction_id, version_id)
         
         if success:
+            # NEW: Mark rule versions as started (not complete as more can be added)
+            transaction_model.update_step_status(transaction_id, "rule_versions_created", True)
+            transaction_model.update_temp_step_status(transaction_id, "rule_versions_in_progress", True)
             return jsonify({
                 "status": "success",
                 "message": "New root version created and rule applied",

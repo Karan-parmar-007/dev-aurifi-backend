@@ -228,6 +228,10 @@ def upload_dataset():
             }
         )
 
+        # NEW: Mark dataset upload step as complete
+        transaction_model.update_step_status(transaction_id, "dataset_uploaded", True)
+        transaction_model.update_current_step(transaction_id, "column_mapping")
+
         # Add transaction to user's transactions array
         user_model.add_transaction(user_id, transaction_name, transaction_id)
 
@@ -783,6 +787,197 @@ def get_all_data_for_one_transaction(transaction_id):
         logger.error(f"Error in get_all_data_for_one_transaction: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({
+            'status': 'error',
+            'message': 'An unexpected error occurred',
+            'details': str(e)
+        }), 500
+    
+@transaction_bp.route('/get_transaction_navigation/<transaction_id>', methods=['GET'])
+def get_transaction_navigation(transaction_id):
+    """Get the next step for transaction navigation
+    
+    Args:
+        transaction_id (str): ID of the transaction
+        
+    Returns:
+        JSON response with navigation information
+    """
+    try:
+        navigation_info = transaction_model.get_next_step(transaction_id)
+        
+        if navigation_info.get("error"):
+            return jsonify({
+                'status': 'error',
+                'message': navigation_info["error"]
+            }), 404
+            
+        return jsonify({
+            'status': 'success',
+            'navigation': navigation_info
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in get_transaction_navigation: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'An unexpected error occurred',
+            'details': str(e)
+        }), 500
+
+@transaction_bp.route('/reset_transaction_steps/<transaction_id>', methods=['POST'])
+def reset_transaction_steps(transaction_id):
+    """Reset transaction steps from a specific step
+    
+    Request body:
+    {
+        "from_step": "rbi_rules_applied"
+    }
+    
+    Args:
+        transaction_id (str): ID of the transaction
+        
+    Returns:
+        JSON response with status
+    """
+    try:
+        data = request.get_json()
+        from_step = data.get("from_step")
+        
+        if not from_step:
+            return jsonify({
+                'status': 'error',
+                'message': 'Missing required field: from_step'
+            }), 400
+            
+        success = transaction_model.reset_steps_from(transaction_id, from_step)
+        
+        if success:
+            # Get next navigation info
+            navigation_info = transaction_model.get_next_step(transaction_id)
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Steps reset from {from_step}',
+                'navigation': navigation_info
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to reset steps'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error in reset_transaction_steps: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'An unexpected error occurred',
+            'details': str(e)
+        }), 500
+
+@transaction_bp.route('/get_transaction_progress/<transaction_id>', methods=['GET'])
+def get_transaction_progress(transaction_id):
+    """Get detailed progress information for a transaction
+    
+    Args:
+        transaction_id (str): ID of the transaction
+        
+    Returns:
+        JSON response with detailed progress information
+    """
+    try:
+        transaction = transaction_model.get_transaction(transaction_id)
+        if not transaction:
+            return jsonify({
+                'status': 'error',
+                'message': 'Transaction not found'
+            }), 404
+            
+        steps_completed = transaction.get("steps_completed", {})
+        temp_steps = transaction.get("temp_steps", {})
+        current_step = transaction.get("current_step", "upload_dataset")
+        
+        # Calculate progress percentage
+        total_steps = len(steps_completed)
+        completed_steps = sum(1 for v in steps_completed.values() if v)
+        progress_percentage = int((completed_steps / total_steps) * 100) if total_steps > 0 else 0
+        
+        # Get rule versions count
+        rule_versions_count = len(transaction.get("rule_application_root_versions", []))
+        
+        return jsonify({
+            'status': 'success',
+            'progress': {
+                'steps_completed': steps_completed,
+                'temp_steps': temp_steps,
+                'current_step': current_step,
+                'progress_percentage': progress_percentage,
+                'total_steps': total_steps,
+                'completed_count': completed_steps,
+                'rule_versions_count': rule_versions_count,
+                'is_processing_done': transaction.get("are_all_steps_complete", False)
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in get_transaction_progress: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'An unexpected error occurred',
+            'details': str(e)
+        }), 500
+
+@transaction_bp.route('/update_transaction_step_status/<transaction_id>', methods=['POST'])
+def update_transaction_step_status(transaction_id):
+    """Manually update a step status (useful for custom workflows)
+    
+    Request body:
+    {
+        "step_name": "column_mapping_done",
+        "status": true,
+        "is_temp": false
+    }
+    
+    Args:
+        transaction_id (str): ID of the transaction
+        
+    Returns:
+        JSON response with status
+    """
+    try:
+        data = request.get_json()
+        step_name = data.get("step_name")
+        status = data.get("status", True)
+        is_temp = data.get("is_temp", False)
+        
+        if not step_name:
+            return jsonify({
+                'status': 'error',
+                'message': 'Missing required field: step_name'
+            }), 400
+            
+        if is_temp:
+            success = transaction_model.update_temp_step_status(transaction_id, step_name, status)
+        else:
+            success = transaction_model.update_step_status(transaction_id, step_name, status)
+            
+        if success:
+            # Get updated navigation info
+            navigation_info = transaction_model.get_next_step(transaction_id)
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Step {step_name} updated to {status}',
+                'navigation': navigation_info
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to update step status'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error in update_transaction_step_status: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': 'An unexpected error occurred',

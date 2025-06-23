@@ -37,18 +37,7 @@ class TransactionModel:
         
 
     def create_transaction(self, user_id, name, base_file_path, primary_asset_class=None, secondary_asset_class=None):
-        """Create a new transaction in the database with initial parameters
-        
-        Args:
-            user_id (str): ID of the user who owns the transaction
-            name (str): Name of the transaction
-            base_file_path (str): Base folder path for transaction files
-            primary_asset_class (str, optional): Primary asset class
-            secondary_asset_class (str, optional): Secondary asset class
-            
-        Returns:
-            str|None: Inserted transaction ID as string, or None on error
-        """
+        """Create a new transaction in the database with initial parameters"""
         try:
             # Check if any transaction with this name exists in the entire database
             existing_transaction = self.collection.find_one({"name": name})
@@ -75,9 +64,29 @@ class TransactionModel:
                 "changed_datatype_of_column": None,
                 "are_all_steps_complete": False,
                 "new_added_columns_datatype": {},
+                "temp_new_column_adding": None,
+                "added_new_column_final": None,
                 "temp_rbi_rules_applied": None,
                 "final_rbi_rules_applied": None,
-                "cutoff_date": None
+                "cutoff_date": None,
+                "rule_application_root_versions": [],
+                # NEW: Step tracking fields
+                "steps_completed": {
+                    "dataset_uploaded": False,
+                    "column_mapping_done": False,
+                    "datatype_conversion_done": False,
+                    "new_fields_added": False,
+                    "rbi_rules_applied": False,
+                    "rule_versions_created": False
+                },
+                "temp_steps": {
+                    "column_mapping_in_progress": False,
+                    "datatype_conversion_in_progress": False,
+                    "new_fields_in_progress": False,
+                    "rbi_rules_in_progress": False,
+                    "rule_versions_in_progress": False
+                },
+                "current_step": "upload_dataset"  # Track current step for navigation
             }
             
             # Add optional fields if provided
@@ -415,3 +424,228 @@ class TransactionModel:
         except PyMongoError as e:
             logger.error(f"Error removing root version: {e}")
             return False
+        
+    def update_step_status(self, transaction_id, step_name, status=True):
+        """Update the status of a specific step
+        
+        Args:
+            transaction_id (str): ID of the transaction
+            step_name (str): Name of the step in steps_completed
+            status (bool): Status to set (default True)
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            result = self.collection.update_one(
+                {"_id": ObjectId(transaction_id)},
+                {
+                    "$set": {
+                        f"steps_completed.{step_name}": status,
+                        "updated_at": datetime.now()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except PyMongoError as e:
+            logger.error(f"Error updating step status: {e}")
+            return False
+
+    def update_temp_step_status(self, transaction_id, temp_step_name, status=True):
+        """Update the status of a temporary step
+        
+        Args:
+            transaction_id (str): ID of the transaction
+            temp_step_name (str): Name of the temp step
+            status (bool): Status to set (default True)
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            result = self.collection.update_one(
+                {"_id": ObjectId(transaction_id)},
+                {
+                    "$set": {
+                        f"temp_steps.{temp_step_name}": status,
+                        "updated_at": datetime.now()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except PyMongoError as e:
+            logger.error(f"Error updating temp step status: {e}")
+            return False
+
+    def update_current_step(self, transaction_id, step_name):
+        """Update the current step
+        
+        Args:
+            transaction_id (str): ID of the transaction
+            step_name (str): Name of the current step
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            result = self.collection.update_one(
+                {"_id": ObjectId(transaction_id)},
+                {
+                    "$set": {
+                        "current_step": step_name,
+                        "updated_at": datetime.now()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except PyMongoError as e:
+            logger.error(f"Error updating current step: {e}")
+            return False
+
+    def reset_steps_from(self, transaction_id, from_step):
+        """Reset all steps from a specific step onwards
+        
+        Args:
+            transaction_id (str): ID of the transaction
+            from_step (str): Step from which to reset (all steps after this will be reset)
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Define step order
+            step_order = [
+                "dataset_uploaded",
+                "column_mapping_done",
+                "datatype_conversion_done",
+                "new_fields_added",
+                "rbi_rules_applied",
+                "rule_versions_created"
+            ]
+            
+            # Find index of from_step
+            if from_step not in step_order:
+                return False
+                
+            from_index = step_order.index(from_step)
+            
+            # Build update operations for steps to reset
+            update_ops = {}
+            for i in range(from_index + 1, len(step_order)):
+                update_ops[f"steps_completed.{step_order[i]}"] = False
+            
+            # Also reset temp steps if going back
+            if from_step in ["dataset_uploaded", "column_mapping_done"]:
+                update_ops["temp_steps.column_mapping_in_progress"] = False
+                update_ops["temp_steps.datatype_conversion_in_progress"] = False
+                update_ops["temp_steps.new_fields_in_progress"] = False
+                update_ops["temp_steps.rbi_rules_in_progress"] = False
+                update_ops["temp_steps.rule_versions_in_progress"] = False
+            elif from_step == "datatype_conversion_done":
+                update_ops["temp_steps.new_fields_in_progress"] = False
+                update_ops["temp_steps.rbi_rules_in_progress"] = False
+                update_ops["temp_steps.rule_versions_in_progress"] = False
+            elif from_step == "new_fields_added":
+                update_ops["temp_steps.rbi_rules_in_progress"] = False
+                update_ops["temp_steps.rule_versions_in_progress"] = False
+            elif from_step == "rbi_rules_applied":
+                update_ops["temp_steps.rule_versions_in_progress"] = False
+                
+            # Clear related data based on reset point
+            if from_index < step_order.index("column_mapping_done"):
+                update_ops["column_rename_file"] = None
+            if from_index < step_order.index("datatype_conversion_done"):
+                update_ops["temp_changing_datatype_of_column"] = None
+                update_ops["changed_datatype_of_column"] = None
+            if from_index < step_order.index("new_fields_added"):
+                update_ops["temp_new_column_adding"] = None
+                update_ops["added_new_column_final"] = None
+                update_ops["new_added_columns_datatype"] = {}
+            if from_index < step_order.index("rbi_rules_applied"):
+                update_ops["temp_rbi_rules_applied"] = None
+                update_ops["final_rbi_rules_applied"] = None
+                update_ops["cutoff_date"] = None
+            if from_index < step_order.index("rule_versions_created"):
+                update_ops["rule_application_root_versions"] = []
+                
+            update_ops["updated_at"] = datetime.now()
+            update_ops["current_step"] = from_step
+            
+            result = self.collection.update_one(
+                {"_id": ObjectId(transaction_id)},
+                {"$set": update_ops}
+            )
+            return result.modified_count > 0
+        except PyMongoError as e:
+            logger.error(f"Error resetting steps: {e}")
+            return False
+
+    def get_next_step(self, transaction_id):
+        """Get the next step user should be redirected to based on completed steps
+        
+        Args:
+            transaction_id (str): ID of the transaction
+            
+        Returns:
+            dict: Contains next_step and can_proceed flag
+        """
+        try:
+            transaction = self.get_transaction(transaction_id)
+            if not transaction:
+                return {"next_step": None, "can_proceed": False, "error": "Transaction not found"}
+                
+            steps_completed = transaction.get("steps_completed", {})
+            temp_steps = transaction.get("temp_steps", {})
+            
+            # Define step flow with their routes
+            step_flow = [
+                ("dataset_uploaded", "upload_dataset", "/transaction/upload-dataset"),
+                ("column_mapping_done", "column_mapping", "/transaction/column-mapping"),
+                ("datatype_conversion_done", "datatype_conversion", "/transaction/datatype-conversion"),
+                ("new_fields_added", "add_fields", "/transaction/add-fields"),
+                ("rbi_rules_applied", "rbi_rules", "/transaction/rbi-rules"),
+                ("rule_versions_created", "rule_versions", "/transaction/rule-versions")
+            ]
+            
+            # Check if there's a temp step in progress
+            if temp_steps.get("column_mapping_in_progress"):
+                return {"next_step": "column_mapping", "route": "/transaction/column-mapping", "can_proceed": True, "in_progress": True}
+            if temp_steps.get("datatype_conversion_in_progress"):
+                return {"next_step": "datatype_conversion", "route": "/transaction/datatype-conversion", "can_proceed": True, "in_progress": True}
+            if temp_steps.get("new_fields_in_progress"):
+                return {"next_step": "add_fields", "route": "/transaction/add-fields", "can_proceed": True, "in_progress": True}
+            if temp_steps.get("rbi_rules_in_progress"):
+                return {"next_step": "rbi_rules", "route": "/transaction/rbi-rules", "can_proceed": True, "in_progress": True}
+            if temp_steps.get("rule_versions_in_progress"):
+                return {"next_step": "rule_versions", "route": "/transaction/rule-versions", "can_proceed": True, "in_progress": True}
+            
+            # Find the next incomplete step
+            for i, (step_key, step_name, route) in enumerate(step_flow):
+                if not steps_completed.get(step_key, False):
+                    # Check if user can proceed to this step
+                    can_proceed = True
+                    if i > 0:
+                        # Check if previous step is completed
+                        prev_step_key = step_flow[i-1][0]
+                        can_proceed = steps_completed.get(prev_step_key, False)
+                        
+                    return {
+                        "next_step": step_name,
+                        "route": route,
+                        "can_proceed": can_proceed,
+                        "completed_steps": [s[1] for s in step_flow[:i] if steps_completed.get(s[0], False)],
+                        "all_steps_complete": False
+                    }
+            
+            # All tracked steps completed (but more can be added later)
+            return {
+                "next_step": "rule_versions",  # Stay on rule versions as more can be added
+                "route": "/transaction/rule-versions",
+                "can_proceed": True,
+                "completed_steps": [s[1] for s in step_flow],
+                "all_steps_complete": False  # Never truly complete as more versions can be added
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting next step: {e}")
+            return {"next_step": None, "can_proceed": False, "error": str(e)}
