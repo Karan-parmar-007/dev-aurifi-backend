@@ -228,12 +228,12 @@ def upload_dataset():
             }
         )
 
+        # Add transaction to user's transactions array
+        user_model.add_transaction(user_id, transaction_name, transaction_id)
+
         # NEW: Mark dataset upload step as complete
         transaction_model.update_step_status(transaction_id, "dataset_uploaded", True)
         transaction_model.update_current_step(transaction_id, "column_mapping")
-
-        # Add transaction to user's transactions array
-        user_model.add_transaction(user_id, transaction_name, transaction_id)
 
         return jsonify({
             'status': 'success',
