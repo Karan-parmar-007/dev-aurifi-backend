@@ -1826,13 +1826,13 @@ def update_bdc_multiplier():
 def get_split_files_for_rule_addition():
     """
     Fetch all split files (split_with_tags) that have sent_for_rule_addition set to true.
-    Also fetches all pinned rules for the user.
+    Also fetches all pinned rules for the user and filters them based on column availability.
     
     Query Parameters:
         - project_id: The ID of the project
         
     Returns:
-        JSON response with split files data where sent_for_rule_addition is true and pinned rules
+        JSON response with split files data where sent_for_rule_addition is true and filtered pinned rules
     """
     try:
         project_id = request.args.get('project_id')
@@ -1850,6 +1850,9 @@ def get_split_files_for_rule_addition():
 
         version_model = VersionModel()
         split_files_for_rules = []
+        
+        # Variable to store column names from the first valid file
+        dataset_columns = None
 
         # 2. Process each split file and check sent_for_rule_addition
         for version_number, version_id in split_with_tags.items():
@@ -1880,6 +1883,10 @@ def get_split_files_for_rule_addition():
                         
                     if df is not None:
                         num_rows = len(df)
+                        
+                        # Get column names from the first valid file
+                        if dataset_columns is None:
+                            dataset_columns = set(df.columns.tolist())
                         
                         # Calculate Loan Amount total
                         if "loan amount" in df.columns:
@@ -1912,11 +1919,11 @@ def get_split_files_for_rule_addition():
         # 3. Sort by version number for consistent ordering
         split_files_for_rules.sort(key=lambda x: x["version_number"])
 
-        # 4. Fetch pinned rules for the user
+        # 4. Fetch pinned rules for the user and filter based on column availability
         user_id = project.get("user_id")
         pinned_rules = []
         
-        if user_id:
+        if user_id and dataset_columns:
             # Import and initialize the RulesBookDebtModel
             from app.models.rules_book_debt_model import RulesBookDebtModel
             rules_model = RulesBookDebtModel()
@@ -1924,16 +1931,32 @@ def get_split_files_for_rule_addition():
             # Get all pinned rules for the user
             pinned_rules_data = rules_model.get_pinned_rules(user_id)
             
-            # Format the pinned rules for response
+            # Filter rules based on column availability
             for rule in pinned_rules_data:
-                pinned_rules.append({
-                    "rule_id": rule.get("_id"),
-                    "rule_name": rule.get("rule_name"),
-                    "tag_name": rule.get("tag_name"),
-                    "type_of_rule": rule.get("type_of_rule"),
-                    "rules": rule.get("rules", [])
-                })
+                # Check if all columns referenced in the rule exist in the dataset
+                rule_valid = True
+                columns_not_found = []
+                
+                for rule_group in rule.get("rules", []):
+                    for condition in rule_group:
+                        column_name = condition.get("column", "").strip()
+                        if column_name and column_name not in dataset_columns:
+                            rule_valid = False
+                            columns_not_found.append(column_name)
+                
+                # Only include rules where all columns are present
+                if rule_valid:
+                    pinned_rules.append({
+                        "rule_id": rule.get("_id"),
+                        "rule_name": rule.get("rule_name"),
+                        "tag_name": rule.get("tag_name"),
+                        "type_of_rule": rule.get("type_of_rule"),
+                        "rules": rule.get("rules", [])
+                    })
+                else:
+                    logger.info(f"Rule '{rule.get('rule_name')}' excluded - columns not found: {columns_not_found}")
 
+        # Return in the EXACT SAME FORMAT as before
         return jsonify({
             "status": "success",
             "project_name": project.get("name", ""),
