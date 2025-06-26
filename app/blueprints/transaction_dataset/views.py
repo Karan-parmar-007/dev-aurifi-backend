@@ -13,7 +13,15 @@ from app.utils.column_names import (
     DEBTSHEET_LOAN_AMOUNT, 
     DEBTSHEET_TAG_NAME, 
     DEBTSHEET_TAG_TYPE,
-    TRANSACTION_LOAN_AMOUNT
+    TRANSACTION_LOAN_AMOUNT,
+    TRANSACTION_TRANSACTION_ID,
+    TRANSACTION_LAST_EMI_DATE,
+    TRANSACTION_FIRST_EMI_DATE,
+    TRANSACTION_MATURITY_DATE,
+    TRANSACTION_DPD,
+    TRANSACTION_OVERDUE,
+    TRANSACTION_RESTRUCTURED,
+    TRANSACTION_RESCHEDULED
 )
 
 # Initialize models
@@ -1428,6 +1436,7 @@ def update_numeric_column():
 def update_currency_column():
     """
     Update currency column by converting to integer and/or applying rounding.
+    If whole_number_multiplier is provided, multiply the column by that number and convert to integer.
     """
     try:
         import math
@@ -1440,6 +1449,7 @@ def update_currency_column():
         column_name = data.get("column_name")
         convert_to_int = data.get("convert_to_int", False)
         round_off_using = data.get("round_off_using", None)
+        whole_number_multiplier = data.get("whole_number_multiplier", None)  # NEW PARAMETER
         
         if not all([version_id, column_name]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -1473,50 +1483,101 @@ def update_currency_column():
         error_count = 0
         empty_count = 0  # Track empty values
         
-        for i in range(len(df)):
-            value = df.at[i, column_name]
-            
-            if value and str(value).strip():
-                try:
-                    # Clean currency value - remove $, commas, and other non-numeric chars
-                    cleaned_value = re.sub(r'[^\d.-]', '', str(value))
+        # NEW LOGIC: If whole_number_multiplier is provided
+        if whole_number_multiplier is not None:
+            try:
+                # Convert multiplier to float to ensure proper multiplication
+                multiplier = float(whole_number_multiplier)
+                
+                for i in range(len(df)):
+                    value = df.at[i, column_name]
                     
-                    # Handle multiple decimal points
-                    if cleaned_value.count('.') > 1:
-                        parts = cleaned_value.split('.')
-                        cleaned_value = parts[0] + '.' + ''.join(parts[1:])
-                    
-                    if cleaned_value and cleaned_value not in ['.', '-', '-.']:
-                        # Convert to float
-                        float_value = float(cleaned_value)
-                        
-                        # Apply rounding if specified
-                        if round_off_using:
-                            if round_off_using.lower() == "up":
-                                float_value = math.ceil(float_value)
-                            elif round_off_using.lower() == "down":
-                                float_value = math.floor(float_value)
-                        
-                        # Convert to int if specified
-                        if convert_to_int:
-                            df.at[i, column_name] = str(int(float_value))
-                        else:
-                            # Keep as currency format with 2 decimal places
-                            df.at[i, column_name] = f"{float_value:.2f}"
+                    if value and str(value).strip():
+                        try:
+                            # Clean currency value - remove $, commas, and other non-numeric chars
+                            cleaned_value = re.sub(r'[^\d.-]', '', str(value))
+                            
+                            # Handle multiple decimal points
+                            if cleaned_value.count('.') > 1:
+                                parts = cleaned_value.split('.')
+                                cleaned_value = parts[0] + '.' + ''.join(parts[1:])
+                            
+                            if cleaned_value and cleaned_value not in ['.', '-', '-.']:
+                                # Convert to float
+                                float_value = float(cleaned_value)
+                                
+                                # Multiply by the whole_number_multiplier
+                                multiplied_value = float_value * multiplier
+                                
+                                # Convert to integer
+                                df.at[i, column_name] = str(int(multiplied_value))
+                            else:
+                                error_count += 1
+                                empty_count += 1
+                                df.at[i, column_name] = ""
+                                logger.warning(f"Invalid currency value at row {i}: {value}")
+                                
+                        except Exception as e:
+                            error_count += 1
+                            empty_count += 1
+                            df.at[i, column_name] = ""
+                            logger.warning(f"Error converting currency value at row {i}: {value} - {str(e)}")
                     else:
+                        empty_count += 1
+                        df.at[i, column_name] = ""
+                        
+            except (TypeError, ValueError) as e:
+                return jsonify({
+                    "error": "Invalid whole_number_multiplier value",
+                    "details": str(e)
+                }), 400
+                
+        else:
+            # EXISTING LOGIC: If whole_number_multiplier is NOT provided
+            for i in range(len(df)):
+                value = df.at[i, column_name]
+                
+                if value and str(value).strip():
+                    try:
+                        # Clean currency value - remove $, commas, and other non-numeric chars
+                        cleaned_value = re.sub(r'[^\d.-]', '', str(value))
+                        
+                        # Handle multiple decimal points
+                        if cleaned_value.count('.') > 1:
+                            parts = cleaned_value.split('.')
+                            cleaned_value = parts[0] + '.' + ''.join(parts[1:])
+                        
+                        if cleaned_value and cleaned_value not in ['.', '-', '-.']:
+                            # Convert to float
+                            float_value = float(cleaned_value)
+                            
+                            # Apply rounding if specified
+                            if round_off_using:
+                                if round_off_using.lower() == "up":
+                                    float_value = math.ceil(float_value)
+                                elif round_off_using.lower() == "down":
+                                    float_value = math.floor(float_value)
+                            
+                            # Convert to int if specified
+                            if convert_to_int:
+                                df.at[i, column_name] = str(int(float_value))
+                            else:
+                                # Keep as currency format with 2 decimal places
+                                df.at[i, column_name] = f"{float_value:.2f}"
+                        else:
+                            error_count += 1
+                            empty_count += 1
+                            df.at[i, column_name] = ""
+                            logger.warning(f"Invalid currency value at row {i}: {value}")
+                            
+                    except Exception as e:
                         error_count += 1
                         empty_count += 1
                         df.at[i, column_name] = ""
-                        logger.warning(f"Invalid currency value at row {i}: {value}")
-                        
-                except Exception as e:
-                    error_count += 1
+                        logger.warning(f"Error converting currency value at row {i}: {value} - {str(e)}")
+                else:
                     empty_count += 1
                     df.at[i, column_name] = ""
-                    logger.warning(f"Error converting currency value at row {i}: {value} - {str(e)}")
-            else:
-                empty_count += 1
-                df.at[i, column_name] = ""
         
         # Check if there are any empty values after conversion
         if empty_count > 0:
@@ -1543,12 +1604,19 @@ def update_currency_column():
             logger.error(f"Error saving file: {str(e)}")
             return jsonify({"error": "Error saving file", "details": str(e)}), 500
         
+        # Prepare response message
+        if whole_number_multiplier is not None:
+            message = f"Currency column '{column_name}' multiplied by {whole_number_multiplier} and converted to integer successfully"
+        else:
+            message = f"Currency column '{column_name}' updated successfully"
+        
         return jsonify({
             "status": "success",
-            "message": f"Currency column '{column_name}' updated successfully",
+            "message": message,
             "version_id": version_id,
             "error_count": error_count,
-            "success_count": len(df) - error_count
+            "success_count": len(df) - error_count,
+            "whole_number_multiplier": whole_number_multiplier
         }), 200
         
     except Exception as e:
@@ -2212,10 +2280,10 @@ def apply_rbi_rules():
             # Find transaction_id column
             transaction_id_col = None
             for col in df.columns:
-                if col.lower() == "transaction_id" or col.lower() == "transaction id":
+                if col.lower() == TRANSACTION_TRANSACTION_ID or col.lower() == "transaction id":
                     transaction_id_col = col
                     break
-            
+        
             if transaction_id_col:
                 # Get duplicate rows before removing
                 duplicate_mask = df.duplicated(subset=[transaction_id_col], keep='first')
@@ -2264,9 +2332,9 @@ def apply_rbi_rules():
             
             for col in df.columns:
                 col_lower = col.lower()
-                if "first emi date" in col_lower:
+                if TRANSACTION_FIRST_EMI_DATE in col_lower:
                     first_emi_col = col
-                elif "last emi date" in col_lower:
+                elif TRANSACTION_LAST_EMI_DATE in col_lower:
                     last_emi_col = col
             
             if first_emi_col and last_emi_col:
@@ -2364,7 +2432,7 @@ def apply_rbi_rules():
             # Find maturity date column
             maturity_col = None
             for col in df.columns:
-                if "maturity date" in col.lower():
+                if TRANSACTION_MATURITY_DATE in col.lower():
                     maturity_col = col
                     break
             
@@ -2439,9 +2507,9 @@ def apply_rbi_rules():
             
             for col in df.columns:
                 col_lower = col.lower()
-                if col_lower == "overdue":
+                if col_lower == TRANSACTION_OVERDUE:
                     overdue_col = col
-                elif col_lower == "dpd":
+                elif col_lower == TRANSACTION_DPD:
                     dpd_col = col
             
             if overdue_col or dpd_col:
@@ -2500,9 +2568,9 @@ def apply_rbi_rules():
             
             for col in df.columns:
                 col_lower = col.lower()
-                if "restructured" in col_lower and "loan" in col_lower:
+                if TRANSACTION_RESTRUCTURED in col_lower:
                     restructured_col = col
-                elif "rescheduled" in col_lower and "loan" in col_lower:
+                elif TRANSACTION_RESCHEDULED in col_lower:
                     rescheduled_col = col
             
             if restructured_col or rescheduled_col:
