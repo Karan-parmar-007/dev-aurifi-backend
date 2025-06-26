@@ -843,304 +843,6 @@ def fetch_data_after_applied_rules():
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
-    
-# to save only the temp files (files on which rule were applied)
-# to save only the temp files (files on which rule were applied)
-# @dataset_bp.route('/finalize_temp_versions', methods=['POST'])
-# def finalize_temp_versions():
-#     """
-#     Transfer temporary versions to final versions in the project.
-#     This API first removes any existing entries in files_with_rules_applied,
-#     then takes temp versions, modifies the filenames to replace _temp with _final,
-#     adds them to files_with_rules_applied, includes versions from split_with_tags
-#     that aren't in temp_files, and finally combines only temp files into one.
-    
-#     Request:
-#         - project_id: The ID of the project
-        
-#     Returns:
-#         JSON response with status and list of final versions
-#     """
-#     try:
-#         data = request.json
-#         project_id = data.get('project_id')
-#         if not project_id:
-#             return jsonify({"error": "Missing Project ID"}), 400
-
-#         # 1. Fetch project
-#         project = project_model.get_project(project_id)
-#         if not project:
-#             return jsonify({"error": "Project not found"}), 404
-
-#         # 2. Check if temp_files exist
-#         temp_files = project.get("temp_files", [])
-#         split_with_tags = project.get("split_with_tags", {})
-        
-#         if not split_with_tags or not temp_files:
-#             return jsonify({"error": "This project is not unlocked"}), 400
-            
-#         # 3. First, check and remove any existing entries in files_with_rules_applied
-#         existing_files_with_rules = project.get("files_with_rules_applied", [])
-#         if existing_files_with_rules:
-#             # Get list of version IDs to delete
-#             version_ids_to_delete = []
-#             for file_entry in existing_files_with_rules:
-#                 for _, version_id in file_entry.items():
-#                     version_ids_to_delete.append(version_id)
-            
-#             # Find and delete the actual files
-#             version_model = VersionModel()
-#             for version_id in version_ids_to_delete:
-#                 version = version_model.collection.find_one({"_id": ObjectId(version_id)})
-#                 if version:
-#                     # Delete the file if it exists
-#                     file_path = version.get("files_path", "")
-#                     if file_path and os.path.exists(file_path):
-#                         try:
-#                             os.remove(file_path)
-#                         except Exception as e:
-#                             logger.warning(f"Error removing file {file_path}: {str(e)}")
-                    
-#                     # Delete the version record
-#                     version_model.delete_version(version_id)
-            
-#             # Clear the files_with_rules_applied array in project
-#             project_model.collection.update_one(
-#                 {"_id": ObjectId(project_id)},
-#                 {"$set": {"files_with_rules_applied": []}}
-#             )
-            
-#             # Refetch the project after updating
-#             project = project_model.get_project(project_id)
-
-#         # 4. Process and transfer each temp file
-#         version_model = VersionModel()
-#         final_versions = []
-#         processed_tag_types = set()  # Track tag+type combinations already processed
-#         temp_dataframes = []  # Store only temp file dataframes for combining
-        
-#         # 4.1 Process temp versions first (they take precedence)
-#         for temp_file in temp_files:
-#             for tag_name, version_id in temp_file.items():  # Changed from version_number to tag_name
-#                 version = version_model.collection.find_one({"_id": ObjectId(version_id)})
-#                 if not version:
-#                     continue
-                
-#                 tag_name_lower = version.get("tag_name", "").lower()  # Normalize to lowercase for comparison
-#                 tag_type = version.get("tag_type_name", "").lower()
-#                 tag_key = f"{tag_name_lower}_{tag_type}"
-#                 processed_tag_types.add(tag_key)
-                
-#                 # Get file path and create new path with _final instead of _temp
-#                 old_file_path = version.get("files_path", "")
-#                 if not old_file_path or not os.path.exists(old_file_path):
-#                     continue
-                
-#                 # Replace _temp with _final in the file path - handle both _temp. and _temp_
-#                 new_file_path = old_file_path.replace("_temp.", "_final.")
-#                 if "_temp_" in new_file_path:
-#                     new_file_path = new_file_path.replace("_temp_", "_final_")
-                
-#                 # Copy the file with the new name
-#                 try:
-#                     import shutil
-#                     shutil.copy2(old_file_path, new_file_path)
-                    
-#                     # Read the file for combining later - ONLY TEMP FILES
-#                     if new_file_path.endswith(".xlsx"):
-#                         df = pd.read_excel(new_file_path, dtype=str)
-#                     elif new_file_path.endswith(".csv"):
-#                         df = pd.read_csv(new_file_path, dtype=str)
-#                     else:
-#                         continue
-#                     temp_dataframes.append(df)  # Add only to temp_dataframes
-                    
-#                 except Exception as e:
-#                     logger.error(f"Error copying file from {old_file_path} to {new_file_path}: {str(e)}")
-#                     continue
-                
-#                 # Create a new version record for the final version
-#                 new_version_id = version_model.create_version(
-#                     project_id=str(project["_id"]),
-#                     description=version.get("description", "").replace("Temporary", "Final"),
-#                     files_path=new_file_path,
-#                     version_number=version.get("version_number", 4.0),
-#                     tag_name=version.get("tag_name"),
-#                     tag_type_name=version.get("tag_type_name"),
-#                     rows_count=version.get("rows_count"),
-#                     rows_added=version.get("rows_added"),
-#                     rows_removed=version.get("rows_removed"),
-#                     modified=version.get("modified"),
-#                     sent_for_rule_addition=True  # Final versions are available for rule addition
-#                 )
-                
-#                 if new_version_id:
-#                     # Add to files_with_rules_applied in project - now using tag_name as key
-#                     project_model.append_files_with_rules_applied(
-#                         project_id,
-#                         {version.get("tag_name", tag_name): new_version_id}
-#                     )
-                    
-#                     # Add to our response list
-#                     final_versions.append({
-#                         "version_id": new_version_id,
-#                         "tag_name": version.get("tag_name"),
-#                         "tag_type": version.get("tag_type_name"),
-#                         "file_path": new_file_path
-#                     })
-                    
-#                     # Delete the old temp file after successful transfer
-#                     try:
-#                         os.remove(old_file_path)
-#                     except Exception as e:
-#                         logger.warning(f"Error removing temp file {old_file_path}: {str(e)}")
-        
-#         # 4.2 Process original split_with_tags (only those not in temp)
-#         for version_number, version_id in split_with_tags.items():
-#             version = version_model.collection.find_one({"_id": ObjectId(version_id)})
-#             if not version:
-#                 continue
-            
-#             tag_name = version.get("tag_name", "").lower()  # Normalize to lowercase for comparison
-#             tag_type = version.get("tag_type_name", "").lower()
-#             tag_key = f"{tag_name}_{tag_type}"
-            
-#             # Skip if we already processed this tag combination from temp_files
-#             if tag_key in processed_tag_types:
-#                 continue
-                
-#             # Skip untagged files from original split_with_tags
-#             if tag_name in ['untagged'] or tag_type in ['unknown']:
-#                 continue
-            
-#             # Get file path and create new path with _final suffix
-#             old_file_path = version.get("files_path", "")
-#             if not old_file_path or not os.path.exists(old_file_path):
-#                 continue
-            
-#             # Create new file path with _final suffix, matching the naming convention
-#             file_dir = os.path.dirname(old_file_path)
-#             file_name = os.path.basename(old_file_path)
-#             base_name, ext = os.path.splitext(file_name)
-            
-#             # For split_with_tags files, we need to add _final before the extension
-#             new_file_name = f"{base_name}_final{ext}"
-#             new_file_path = os.path.join(file_dir, new_file_name)
-            
-#             # Copy the file with the new name
-#             try:
-#                 import shutil
-#                 shutil.copy2(old_file_path, new_file_path)
-                
-#                 # DO NOT read these files for combining - we only combine temp files
-                
-#             except Exception as e:
-#                 logger.error(f"Error copying file from {old_file_path} to {new_file_path}: {str(e)}")
-#                 continue
-            
-#             # Create a new version record for the final version
-#             new_version_id = version_model.create_version(
-#                 project_id=str(project["_id"]),
-#                 description=f"Final version of {version.get('tag_name')} - {version.get('tag_type_name')}",
-#                 files_path=new_file_path,
-#                 version_number=float(version_number.replace('v', '')),  # Convert v3.1 to 3.1
-#                 tag_name=version.get("tag_name"),
-#                 tag_type_name=version.get("tag_type_name"),
-#                 rows_count=version.get("rows_count", 0),
-#                 rows_added=0,  # These aren't in temp, so no changes
-#                 rows_removed=0,
-#                 modified=False,
-#                 sent_for_rule_addition=True
-#             )
-            
-#             if new_version_id:
-#                 # Add to files_with_rules_applied in project - use tag_name as key
-#                 project_model.append_files_with_rules_applied(
-#                     project_id,
-#                     {version.get("tag_name"): new_version_id}
-#                 )
-                
-#                 # Add to our response list
-#                 final_versions.append({
-#                     "version_id": new_version_id,
-#                     "tag_name": version.get("tag_name"),
-#                     "tag_type": version.get("tag_type_name"),
-#                     "file_path": new_file_path
-#                 })
-        
-#         # 5. Combine only temp dataframes and create a combined file
-#         combined_version_id = None
-#         if temp_dataframes:  # Use temp_dataframes instead of all_dataframes
-#             try:
-#                 # Combine only temp dataframes
-#                 combined_df = pd.concat(temp_dataframes, ignore_index=True)
-                
-#                 # Create filename for combined file
-#                 project_folder = project.get("base_file_path")
-#                 project_name = project.get("name")
-#                 # Determine file extension based on first file
-#                 ext = ".xlsx" if final_versions and final_versions[0]["file_path"].endswith(".xlsx") else ".csv"
-#                 combined_filename = f"{project_name}_combined_final{ext}"
-#                 combined_file_path = os.path.join(project_folder, combined_filename)
-                
-#                 # Save combined file
-#                 if ext == ".xlsx":
-#                     combined_df.to_excel(combined_file_path, index=False, engine="openpyxl")
-#                 else:
-#                     combined_df.to_csv(combined_file_path, index=False, encoding="utf-8")
-                
-#                 # Calculate total loan amount for combined file
-#                 total_loan_amount = 0
-#                 if "loan amount" in combined_df.columns:
-#                     total_loan_amount = pd.to_numeric(combined_df["loan amount"], errors="coerce").sum()
-#                     total_loan_amount = float(total_loan_amount) if not pd.isna(total_loan_amount) else 0
-                
-#                 # Create version for combined file
-#                 combined_version_id = version_model.create_version(
-#                     project_id=str(project["_id"]),
-#                     description="Combined final file from temp files only",
-#                     files_path=combined_file_path,
-#                     version_number=99,  # Use a high version number for combined file
-#                     tag_name="Combined_Temp",
-#                     tag_type_name="Modified",
-#                     rows_count=len(combined_df),
-#                     total_amount=total_loan_amount,
-#                     sent_for_rule_addition=False  # Combined file not for rule addition
-#                 )
-                
-#                 # Update project with combined file version
-#                 if combined_version_id:
-#                     project_model.collection.update_one(
-#                         {"_id": ObjectId(project_id)},
-#                         {"$set": {"combined_file": combined_version_id}}
-#                     )
-                    
-#             except Exception as e:
-#                 logger.error(f"Error creating combined file: {str(e)}")
-        
-#         # 6. Clear temp_files from project after transferring all
-#         if final_versions:
-#             # Update both temp_files (empty array) and are_all_steps_complete (set to True)
-#             project_model.collection.update_one(
-#                 {"_id": ObjectId(project_id)},
-#                 {"$set": {
-#                     "temp_files": [],
-#                     "are_all_steps_complete": True  # Set to True upon successful completion
-#                 }}
-#             )
-        
-#         return jsonify({
-#             "status": "success",
-#             "message": f"Successfully finalized {len(final_versions)} versions",
-#             "final_versions": final_versions,
-#             "combined_version_id": combined_version_id
-#         }), 200
-
-#     except Exception as e:
-#         logger.error(f"Error in finalize_temp_versions: {str(e)}")
-#         import traceback
-#         traceback.print_exc()
-#         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
     
 @dataset_bp.route('/finalize_temp_versions', methods=['POST'])
@@ -2872,8 +2574,9 @@ def update_numeric_column():
 def update_currency_column():
     """
     Update currency column by converting to integer and/or applying rounding.
+    If whole_number_multiplier is provided, multiply the column by that number and convert to integer.
     """
-    try:
+    try: 
         import math
         import re
         
@@ -2884,6 +2587,7 @@ def update_currency_column():
         column_name = data.get("column_name")
         convert_to_int = data.get("convert_to_int", False)
         round_off_using = data.get("round_off_using", None)
+        whole_number_multiplier = data.get("whole_number_multiplier", None)  # NEW PARAMETER
         
         if not all([version_id, column_name]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -2918,50 +2622,101 @@ def update_currency_column():
         error_count = 0
         empty_count = 0  # Track empty values
         
-        for i in range(len(df)):
-            value = df.at[i, column_name]
-            
-            if value and str(value).strip():
-                try:
-                    # Clean currency value - remove $, commas, and other non-numeric chars
-                    cleaned_value = re.sub(r'[^\d.-]', '', str(value))
+        # NEW LOGIC: If whole_number_multiplier is provided
+        if whole_number_multiplier is not None:
+            try:
+                # Convert multiplier to float to ensure proper multiplication
+                multiplier = float(whole_number_multiplier)
+                
+                for i in range(len(df)):
+                    value = df.at[i, column_name]
                     
-                    # Handle multiple decimal points
-                    if cleaned_value.count('.') > 1:
-                        parts = cleaned_value.split('.')
-                        cleaned_value = parts[0] + '.' + ''.join(parts[1:])
-                    
-                    if cleaned_value and cleaned_value not in ['.', '-', '-.']:
-                        # Convert to float
-                        float_value = float(cleaned_value)
-                        
-                        # Apply rounding if specified
-                        if round_off_using:
-                            if round_off_using.lower() == "up":
-                                float_value = math.ceil(float_value)
-                            elif round_off_using.lower() == "down":
-                                float_value = math.floor(float_value)
-                        
-                        # Convert to int if specified
-                        if convert_to_int:
-                            df.at[i, column_name] = str(int(float_value))
-                        else:
-                            # Keep as currency format with 2 decimal places
-                            df.at[i, column_name] = f"{float_value:.2f}"
+                    if value and str(value).strip():
+                        try:
+                            # Clean currency value - remove $, commas, and other non-numeric chars
+                            cleaned_value = re.sub(r'[^\d.-]', '', str(value))
+                            
+                            # Handle multiple decimal points
+                            if cleaned_value.count('.') > 1:
+                                parts = cleaned_value.split('.')
+                                cleaned_value = parts[0] + '.' + ''.join(parts[1:])
+                            
+                            if cleaned_value and cleaned_value not in ['.', '-', '-.']:
+                                # Convert to float
+                                float_value = float(cleaned_value)
+                                
+                                # Multiply by the whole_number_multiplier
+                                multiplied_value = float_value * multiplier
+                                
+                                # Convert to integer
+                                df.at[i, column_name] = str(int(multiplied_value))
+                            else:
+                                error_count += 1
+                                empty_count += 1
+                                df.at[i, column_name] = ""
+                                logger.warning(f"Invalid currency value at row {i}: {value}")
+                                
+                        except Exception as e:
+                            error_count += 1
+                            empty_count += 1
+                            df.at[i, column_name] = ""
+                            logger.warning(f"Error converting currency value at row {i}: {value} - {str(e)}")
                     else:
+                        empty_count += 1
+                        df.at[i, column_name] = ""
+                        
+            except (TypeError, ValueError) as e:
+                return jsonify({
+                    "error": "Invalid whole_number_multiplier value",
+                    "details": str(e)
+                }), 400
+                
+        else:
+            # EXISTING LOGIC: If whole_number_multiplier is NOT provided
+            for i in range(len(df)):
+                value = df.at[i, column_name]
+                
+                if value and str(value).strip():
+                    try:
+                        # Clean currency value - remove $, commas, and other non-numeric chars
+                        cleaned_value = re.sub(r'[^\d.-]', '', str(value))
+                        
+                        # Handle multiple decimal points
+                        if cleaned_value.count('.') > 1:
+                            parts = cleaned_value.split('.')
+                            cleaned_value = parts[0] + '.' + ''.join(parts[1:])
+                        
+                        if cleaned_value and cleaned_value not in ['.', '-', '-.']:
+                            # Convert to float
+                            float_value = float(cleaned_value)
+                            
+                            # Apply rounding if specified
+                            if round_off_using:
+                                if round_off_using.lower() == "up":
+                                    float_value = math.ceil(float_value)
+                                elif round_off_using.lower() == "down":
+                                    float_value = math.floor(float_value)
+                            
+                            # Convert to int if specified
+                            if convert_to_int:
+                                df.at[i, column_name] = str(int(float_value))
+                            else:
+                                # Keep as currency format with 2 decimal places
+                                df.at[i, column_name] = f"{float_value:.2f}"
+                        else:
+                            error_count += 1
+                            empty_count += 1
+                            df.at[i, column_name] = ""
+                            logger.warning(f"Invalid currency value at row {i}: {value}")
+                            
+                    except Exception as e:
                         error_count += 1
                         empty_count += 1
                         df.at[i, column_name] = ""
-                        logger.warning(f"Invalid currency value at row {i}: {value}")
-                        
-                except Exception as e:
-                    error_count += 1
+                        logger.warning(f"Error converting currency value at row {i}: {value} - {str(e)}")
+                else:
                     empty_count += 1
                     df.at[i, column_name] = ""
-                    logger.warning(f"Error converting currency value at row {i}: {value} - {str(e)}")
-            else:
-                empty_count += 1
-                df.at[i, column_name] = ""
         
         # Check if there are any empty values after conversion
         if empty_count > 0:
@@ -2988,12 +2743,19 @@ def update_currency_column():
             logger.error(f"Error saving file: {str(e)}")
             return jsonify({"error": "Error saving file", "details": str(e)}), 500
         
+        # Prepare response message
+        if whole_number_multiplier is not None:
+            message = f"Currency column '{column_name}' multiplied by {whole_number_multiplier} and converted to integer successfully"
+        else:
+            message = f"Currency column '{column_name}' updated successfully"
+        
         return jsonify({
             "status": "success",
-            "message": f"Currency column '{column_name}' updated successfully",
+            "message": message,
             "version_id": version_id,
             "error_count": error_count,
-            "success_count": len(df) - error_count
+            "success_count": len(df) - error_count,
+            "whole_number_multiplier": whole_number_multiplier
         }), 200
         
     except Exception as e:
