@@ -11,7 +11,7 @@ from flask import request, jsonify, send_file
 import pandas as pd
 from bson import ObjectId
 from datetime import datetime
-from utils.column_names import (DEBTSHEET_LOAN_AMOUNT, DEBTSHEET_TAG_NAME, DEBTSHEET_TAG_TYPE, TRANSACTION_LOAN_AMOUNT)
+from app.utils.column_names import (DEBTSHEET_LOAN_AMOUNT, DEBTSHEET_TAG_NAME, DEBTSHEET_TAG_TYPE, TRANSACTION_LOAN_AMOUNT)
 
 # Initialize models
 project_model = ProjectModel()

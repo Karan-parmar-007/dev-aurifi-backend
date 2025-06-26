@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from flask import request, jsonify
 import pandas as pd
 from bson import ObjectId
-from utils.column_names import (
+from app.utils.column_names import (
     DEBTSHEET_LOAN_AMOUNT, 
     DEBTSHEET_TAG_NAME, 
     DEBTSHEET_TAG_TYPE,

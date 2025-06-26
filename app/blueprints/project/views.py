@@ -8,7 +8,7 @@ from app.utils.logger import logger
 from werkzeug.utils import secure_filename
 from app.models.version_model import VersionModel
 from bson import ObjectId
-from utils.column_names import (
+from app.utils.column_names import (
     DEBTSHEET_LOAN_AMOUNT, 
     DEBTSHEET_TAG_NAME, 
     DEBTSHEET_TAG_TYPE,

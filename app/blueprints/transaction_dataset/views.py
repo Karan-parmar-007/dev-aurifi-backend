@@ -9,7 +9,7 @@ from bson import ObjectId
 import os
 from app.utils.db import db
 from datetime import datetime
-from utils.column_names import (
+from app.utils.column_names import (
     DEBTSHEET_LOAN_AMOUNT, 
     DEBTSHEET_TAG_NAME, 
     DEBTSHEET_TAG_TYPE,
