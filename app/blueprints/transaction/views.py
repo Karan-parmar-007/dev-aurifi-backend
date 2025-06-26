@@ -9,6 +9,12 @@ from werkzeug.utils import secure_filename
 from flask import request, jsonify
 import pandas as pd
 from bson import ObjectId
+from utils.column_names import (
+    DEBTSHEET_LOAN_AMOUNT, 
+    DEBTSHEET_TAG_NAME, 
+    DEBTSHEET_TAG_TYPE,
+    TRANSACTION_LOAN_AMOUNT
+)
 
 # Initialize models
 transaction_model = TransactionModel()
@@ -505,7 +511,7 @@ def get_all_transactions(user_id):
                         # Calculate total loan amount if column exists
                         loan_col = None
                         for col in df.columns:
-                            if col.lower() in ["loan amount", "loan_amount"]:
+                            if col.lower() in [DEBTSHEET_LOAN_AMOUNT, "loan_amount"]:
                                 loan_col = col
                                 break
                         
@@ -645,7 +651,7 @@ def get_all_data_for_one_transaction(transaction_id):
                     # Calculate loan amount
                     loan_col = None
                     for col in df.columns:
-                        if col.lower() in ["loan amount", "loan_amount"]:
+                        if col.lower() in [DEBTSHEET_LOAN_AMOUNT, "loan_amount"]:
                             loan_col = col
                             break
                     

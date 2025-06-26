@@ -11,6 +11,7 @@ from flask import request, jsonify, send_file
 import pandas as pd
 from bson import ObjectId
 from datetime import datetime
+from utils.column_names import (DEBTSHEET_LOAN_AMOUNT, DEBTSHEET_TAG_NAME, DEBTSHEET_TAG_TYPE, TRANSACTION_LOAN_AMOUNT)
 
 # Initialize models
 project_model = ProjectModel()
@@ -266,8 +267,9 @@ def partition_by_tags():
         if not file_path or not os.path.exists(file_path):
             return jsonify({"error": "File not found"}), 404
 
-        tag_column = 'Tags'
-        tag_type_column = 'Tag Type'
+        tag_column = DEBTSHEET_TAG_NAME
+        tag_type_column = DEBTSHEET_TAG_TYPE
+
         project_name = project.get("name", f"project_{project_id}")
 
         # Step 2: Load the Dataset
@@ -382,7 +384,7 @@ def partition_by_tags():
 def get_split_files_info():
     """
     Fetch info about all split files (split_with_tags) for a project.
-    Includes the total of the "Loan Amount" column for each file.
+    Includes the total of the DEBTSHEET_LOAN_AMOUNT column for each file.
     Also fetches all pinned rules for the user.
     """
     try:
@@ -428,9 +430,9 @@ def get_split_files_info():
                         num_rows = len(df)
                         
                         # Calculate Loan Amount total
-                        if "loan amount" in df.columns:
+                        if DEBTSHEET_LOAN_AMOUNT in df.columns:
                             # Convert to numeric and sum, ignoring non-numeric values
-                            loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                            loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                             loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                         else:
                             logger.warning(f"'Loan Amount' column not found in file {file_path}")
@@ -689,8 +691,8 @@ def fetch_data_after_applied_rules():
                         else:
                             df = None
                             
-                        if df is not None and "loan amount" in df.columns:
-                            loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                        if df is not None and DEBTSHEET_LOAN_AMOUNT in df.columns:
+                            loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                             file_info["loan_amount_total"] = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                     except Exception as e:
                         logger.error(f"Error processing file {file_path}: {str(e)}")
@@ -742,8 +744,8 @@ def fetch_data_after_applied_rules():
                     else:
                         df = None
                         
-                    if df is not None and "loan amount" in df.columns:
-                        loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                    if df is not None and DEBTSHEET_LOAN_AMOUNT in df.columns:
+                        loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                         file_info["loan_amount_total"] = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                 except Exception as e:
                     logger.error(f"Error processing file {file_path}: {str(e)}")
@@ -775,8 +777,8 @@ def fetch_data_after_applied_rules():
                             else:
                                 df = None
                                 
-                            if df is not None and "loan amount" in df.columns:
-                                loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                            if df is not None and DEBTSHEET_LOAN_AMOUNT in df.columns:
+                                loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                                 loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                         except Exception as e:
                             logger.error(f"Error reading tracking file {file_path}: {str(e)}")
@@ -809,8 +811,8 @@ def fetch_data_after_applied_rules():
                             else:
                                 df = None
                                 
-                            if df is not None and "loan amount" in df.columns:
-                                loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                            if df is not None and DEBTSHEET_LOAN_AMOUNT in df.columns:
+                                loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                                 loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                         except Exception as e:
                             logger.error(f"Error reading tracking file {file_path}: {str(e)}")
@@ -1098,8 +1100,8 @@ def finalize_temp_versions():
                 
                 # Calculate total loan amount for combined file
                 total_loan_amount = 0
-                if "loan amount" in combined_df.columns:
-                    total_loan_amount = pd.to_numeric(combined_df["loan amount"], errors="coerce").sum()
+                if DEBTSHEET_LOAN_AMOUNT in combined_df.columns:
+                    total_loan_amount = pd.to_numeric(combined_df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                     total_loan_amount = float(total_loan_amount) if not pd.isna(total_loan_amount) else 0
                 
                 # Create version for combined file
@@ -1222,8 +1224,8 @@ def get_finalized_data():
                         else:
                             df = None
                             
-                        if df is not None and "loan amount" in df.columns:
-                            loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                        if df is not None and DEBTSHEET_LOAN_AMOUNT in df.columns:
+                            loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                             file_info["loan_amount_total"] = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                     except Exception as e:
                         logger.error(f"Error processing file {file_path}: {str(e)}")
@@ -1255,8 +1257,8 @@ def get_finalized_data():
                         else:
                             df = None
                             
-                        if df is not None and "loan amount" in df.columns:
-                            loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                        if df is not None and DEBTSHEET_LOAN_AMOUNT in df.columns:
+                            loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                             combined_file_info["loan_amount_total"] = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                     except Exception as e:
                         logger.error(f"Error processing combined file {file_path}: {str(e)}")
@@ -1286,8 +1288,8 @@ def get_finalized_data():
                             else:
                                 df = None
                                 
-                            if df is not None and "loan amount" in df.columns:
-                                loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                            if df is not None and DEBTSHEET_LOAN_AMOUNT in df.columns:
+                                loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                                 loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                         except Exception as e:
                             logger.error(f"Error reading tracking file {file_path}: {str(e)}")
@@ -1320,8 +1322,8 @@ def get_finalized_data():
                             else:
                                 df = None
                                 
-                            if df is not None and "loan amount" in df.columns:
-                                loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                            if df is not None and DEBTSHEET_LOAN_AMOUNT in df.columns:
+                                loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                                 loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                         except Exception as e:
                             logger.error(f"Error reading tracking file {file_path}: {str(e)}")
@@ -1591,9 +1593,9 @@ def get_split_files_for_rule_addition():
                             dataset_columns = set(df.columns.tolist())
                         
                         # Calculate Loan Amount total
-                        if "loan amount" in df.columns:
+                        if DEBTSHEET_LOAN_AMOUNT in df.columns:
                             # Convert to numeric and sum, ignoring non-numeric values
-                            loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                            loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                             loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                         else:
                             logger.warning(f"'Loan Amount' column not found in file {file_path}")
@@ -2888,8 +2890,8 @@ def fetch_temp_file(version_id):
                 
             # Calculate loan amount total if exists
             loan_amount_total = 0
-            if "loan amount" in df.columns:
-                loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+            if DEBTSHEET_LOAN_AMOUNT in df.columns:
+                loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                 loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                 
             return jsonify({
@@ -2965,8 +2967,8 @@ def fetch_rows_removed(project_id, tag_name):
             
         # Calculate loan amount total if exists
         loan_amount_total = 0
-        if "loan amount" in df.columns:
-            loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+        if DEBTSHEET_LOAN_AMOUNT in df.columns:
+            loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
             loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
             
         # Replace NaN with empty strings
@@ -3042,8 +3044,8 @@ def fetch_rows_added(project_id, tag_name):
             
         # Calculate loan amount total if exists
         loan_amount_total = 0
-        if "loan amount" in df.columns:
-            loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+        if DEBTSHEET_LOAN_AMOUNT in df.columns:
+            loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
             loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
             
         # Replace NaN with empty strings
@@ -3245,8 +3247,8 @@ def get_temp_version_by_tag():
                 
                 # Calculate loan amount total if column exists
                 loan_amount_total = 0
-                if "loan amount" in df.columns:
-                    loan_amount_total = pd.to_numeric(df["loan amount"], errors="coerce").sum()
+                if DEBTSHEET_LOAN_AMOUNT in df.columns:
+                    loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors="coerce").sum()
                     loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                 
                 # Replace NaN with empty strings

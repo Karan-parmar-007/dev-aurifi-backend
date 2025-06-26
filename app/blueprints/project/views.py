@@ -8,6 +8,12 @@ from app.utils.logger import logger
 from werkzeug.utils import secure_filename
 from app.models.version_model import VersionModel
 from bson import ObjectId
+from utils.column_names import (
+    DEBTSHEET_LOAN_AMOUNT, 
+    DEBTSHEET_TAG_NAME, 
+    DEBTSHEET_TAG_TYPE,
+    TRANSACTION_LOAN_AMOUNT
+)
 
 # Initialize models
 project_model = ProjectModel()
@@ -408,8 +414,8 @@ def get_projects(user_id):
                                     
                                     # Calculate loan amount total if column exists
                                     loan_amount_total = 0
-                                    if 'loan amount' in df.columns:
-                                        loan_amount_total = pd.to_numeric(df['loan amount'], errors='coerce').sum()
+                                    if DEBTSHEET_LOAN_AMOUNT in df.columns:
+                                        loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors='coerce').sum()
                                         loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                                     
                                     # Store file data
@@ -446,8 +452,8 @@ def get_projects(user_id):
                                 if df is not None:
                                     # Calculate loan amount total
                                     loan_amount_total = 0
-                                    if 'loan amount' in df.columns:
-                                        loan_amount_total = pd.to_numeric(df['loan amount'], errors='coerce').sum()
+                                    if DEBTSHEET_LOAN_AMOUNT in df.columns:
+                                        loan_amount_total = pd.to_numeric(df[DEBTSHEET_LOAN_AMOUNT], errors='coerce').sum()
                                         loan_amount_total = float(loan_amount_total) if not pd.isna(loan_amount_total) else 0
                                     
                                     file_data['combined_file'] = {
