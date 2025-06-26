@@ -9,5 +9,4 @@ DEBTSHEET_TAG_TYPE = "optimization_type"
 TRANSACTION_LOAN_AMOUNT = "loan amount"
 
 # You can add more columns as needed in the future
-# TRANSACTION_TAG_NAME = "tag name"
 # TRANSACTION_DATE = "date"
