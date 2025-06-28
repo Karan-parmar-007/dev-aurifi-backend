@@ -2087,7 +2087,7 @@ def start_applying_rbi_rules():
         # Calculate initial loan amount if column exists
         loan_col = None
         for col in df.columns:
-            if col.lower() == DEBTSHEET_LOAN_AMOUNT or col.lower() == "loan_amount":
+            if col.lower() == TRANSACTION_LOAN_AMOUNT or col.lower() == "loan_amount":
                 loan_col = col
                 break
                 
@@ -2241,7 +2241,7 @@ def apply_rbi_rules():
         # Find loan amount column once
         loan_col = None
         for col in df.columns:
-            if col.lower() == DEBTSHEET_LOAN_AMOUNT or col.lower() == "loan_amount":
+            if col.lower() == TRANSACTION_LOAN_AMOUNT or col.lower() == "loan_amount":
                 loan_col = col
                 break
         
@@ -2722,7 +2722,7 @@ def save_rbi_rules_applied_temp_to_final():
         # Calculate final loan amount
         loan_col = None
         for col in df.columns:
-            if col.lower() == DEBTSHEET_LOAN_AMOUNT or col.lower() == "loan_amount":
+            if col.lower() == TRANSACTION_LOAN_AMOUNT or col.lower() == "loan_amount":
                 loan_col = col
                 break
         
@@ -3565,7 +3565,7 @@ def apply_complex_rules_to_file(file_path, rules, datatype_mapping=None):
         # Find loan amount column
         loan_col = None
         for col in df.columns:
-            if col.lower() in [DEBTSHEET_LOAN_AMOUNT, "loan_amount"]:
+            if col.lower() in [TRANSACTION_LOAN_AMOUNT, "loan_amount"]:
                 loan_col = col
                 break
         
@@ -4164,7 +4164,7 @@ def get_final_rbi_data(transaction_id):
         loan_amount_total = 0
         loan_col = None
         for col in df_total.columns:
-            if col.lower() in [DEBTSHEET_LOAN_AMOUNT, "loan_amount"]:
+            if col.lower() in [TRANSACTION_LOAN_AMOUNT, "loan_amount"]:
                 loan_col = col
                 break
         
