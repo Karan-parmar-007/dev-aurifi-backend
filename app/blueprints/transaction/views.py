@@ -511,7 +511,7 @@ def get_all_transactions(user_id):
                         # Calculate total loan amount if column exists
                         loan_col = None
                         for col in df.columns:
-                            if col.lower() in [DEBTSHEET_LOAN_AMOUNT, "loan_amount"]:
+                            if col.lower() in [TRANSACTION_LOAN_AMOUNT, "loan_amount"]:
                                 loan_col = col
                                 break
                         
@@ -651,7 +651,7 @@ def get_all_data_for_one_transaction(transaction_id):
                     # Calculate loan amount
                     loan_col = None
                     for col in df.columns:
-                        if col.lower() in [DEBTSHEET_LOAN_AMOUNT, "loan_amount"]:
+                        if col.lower() in [TRANSACTION_LOAN_AMOUNT, "loan_amount"]:
                             loan_col = col
                             break
                     
