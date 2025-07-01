@@ -1,6 +1,8 @@
 import os
 from openai import OpenAI
 from flask import current_app
+from dotenv import load_dotenv
+load_dotenv()
 
 def send_to_openai_assistant(input_data):
     """
