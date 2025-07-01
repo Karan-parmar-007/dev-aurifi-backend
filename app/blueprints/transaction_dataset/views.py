@@ -23,6 +23,7 @@ from app.utils.column_names import (
     TRANSACTION_RESTRUCTURED,
     TRANSACTION_RESCHEDULED
 )
+import json 
 
 # Initialize models
 transaction_model = TransactionModel()
@@ -4216,4 +4217,95 @@ def get_final_rbi_data(transaction_id):
             'status': 'error',
             'message': 'An unexpected error occurred',
             'details': str(e)
+        }), 500
+
+@transaction_dataset_bp.route('/get_gpt_column_mapping/<transaction_id>', methods=['GET'])
+def get_gpt_column_mapping(transaction_id):
+    """
+    Fetch system columns and dataset columns from preprocessed dataset,
+    send to GPT assistant, and return the mapping.
+    """
+    try:
+        # Get transaction
+        transaction = transaction_model.get_transaction(transaction_id)
+        if not transaction:
+            return jsonify({'status': 'error', 'message': 'Transaction not found'}), 404
+
+        # Get preprocessed version id
+        version_id = transaction.get('preprocessed_file')
+        if not version_id:
+            return jsonify({'status': 'error', 'message': 'Preprocessed file not found'}), 404
+
+        # Get version details
+        version = transaction_version_model.get_version(version_id)
+        if not version:
+            return jsonify({'status': 'error', 'message': 'Version not found'}), 404
+
+        file_path = version.get('files_path')
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+
+        # Read dataset columns and get sample values
+        import pandas as pd
+        if file_path.endswith('.xlsx'):
+            df = pd.read_excel(file_path, dtype=str)
+        elif file_path.endswith('.csv'):
+            df = pd.read_csv(file_path, dtype=str)
+        else:
+            return jsonify({'status': 'error', 'message': 'Unsupported file format'}), 400
+
+        # Prepare uploaded columns with sample values
+        uploaded_columns = []
+        for col in df.columns:
+            # Get up to 3 non-null sample values
+            examples = df[col].dropna().unique().tolist()[:5]
+            uploaded_columns.append({
+                "name": col,
+                "example_items": examples
+            })
+
+        # Get system columns with metadata
+        from app.models.system_transaction_columns import SystemTransactionColumnModel
+        system_column_model = SystemTransactionColumnModel()
+        system_columns = system_column_model.get_all_columns()
+        system_columns_structured = []
+        for col in system_columns:
+            system_columns_structured.append({
+                "name": col.get("column_name"),
+                "description": col.get("description", ""),
+                "alternative_names": col.get("alt_names", [])
+            })
+
+        # Prepare input for GPT
+        input_data = {
+            "system_columns": system_columns_structured,
+            "uploaded_columns": uploaded_columns
+        }
+
+        print(input_data)  # Debugging output to check the structure
+
+        # Send to GPT assistant
+        from app.utils.column_mapping import send_to_openai_assistant
+        gpt_response = send_to_openai_assistant(input_data)
+
+        # Parse the stringified JSON if present
+        if gpt_response.get("status") == "success" and "response" in gpt_response:
+            try:
+                gpt_response["response"] = json.loads(gpt_response["response"])
+            except Exception as e:
+                logger.error(f"Failed to parse GPT response: {e}")
+
+        return jsonify({
+            "status": "success",
+            "gpt_response": gpt_response
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in get_gpt_column_mapping: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": "An unexpected error occurred",
+            "details": str(e)
         }), 500

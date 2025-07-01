@@ -12,6 +12,7 @@ import pandas as pd
 from bson import ObjectId
 from datetime import datetime
 from app.utils.column_names import (DEBTSHEET_LOAN_AMOUNT, DEBTSHEET_TAG_NAME, DEBTSHEET_TAG_TYPE, TRANSACTION_LOAN_AMOUNT)
+import json
 
 # Initialize models
 project_model = ProjectModel()
@@ -3331,4 +3332,96 @@ def revert_to_split_tags(project_id):
             'status': 'error',
             'message': 'An unexpected error occurred',
             'details': str(e)
+        }), 500
+
+
+@dataset_bp.route('/get_gpt_column_mapping/<project_id>', methods=['GET'])
+def get_gpt_column_mapping(project_id):
+    """
+    Fetch system columns and dataset columns from preprocessed dataset,
+    send to GPT assistant, and return the mapping.
+    """
+    try:
+        # Get project
+        project = project_model.get_project(project_id)
+        if not project:
+            return jsonify({'status': 'error', 'message': 'Project not found'}), 404
+
+        # Get the preprocessed version id (dataset_after_preprocessing)
+        version_id = project.get('dataset_after_preprocessing')
+        if not version_id:
+            return jsonify({'status': 'error', 'message': 'Preprocessed file not found'}), 404
+
+        # Get version details
+        version_model = VersionModel()
+        version = version_model.collection.find_one({"_id": ObjectId(version_id)})
+        if not version:
+            return jsonify({'status': 'error', 'message': 'Version not found'}), 404
+
+        file_path = version.get('files_path')
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+
+        # Read dataset columns and get sample values
+        import pandas as pd
+        if file_path.endswith('.xlsx'):
+            df = pd.read_excel(file_path, dtype=str)
+        elif file_path.endswith('.csv'):
+            df = pd.read_csv(file_path, dtype=str)
+        else:
+            return jsonify({'status': 'error', 'message': 'Unsupported file format'}), 400
+
+        # Prepare uploaded columns with sample values
+        uploaded_columns = []
+        for col in df.columns:
+            examples = df[col].dropna().unique().tolist()[:5]
+            uploaded_columns.append({
+                "name": col,
+                "example_items": examples
+            })
+
+        # Get system columns with metadata
+        from app.models.system_column_model import SystemColumnModel
+        system_column_model = SystemColumnModel()
+        system_columns = system_column_model.get_all_columns()
+        system_columns_structured = []
+        for col in system_columns:
+            system_columns_structured.append({
+                "name": col.get("column_name"),
+                "description": col.get("description", ""),
+                "alternative_names": col.get("alt_names", [])
+            })
+
+        # Prepare input for GPT
+        input_data = {
+            "system_columns": system_columns_structured,
+            "uploaded_columns": uploaded_columns
+        }
+
+        print(input_data)
+
+        # Send to GPT assistant
+        from app.utils.column_mapping import send_to_openai_assistant
+        gpt_response = send_to_openai_assistant(input_data)
+
+        # Parse the stringified JSON if present
+        if gpt_response.get("status") == "success" and "response" in gpt_response:
+            try:
+                gpt_response["response"] = json.loads(gpt_response["response"])
+            except Exception as e:
+                logger.error(f"Failed to parse GPT response: {e}")
+
+        return jsonify({
+            "status": "success",
+            "gpt_response": gpt_response
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in get_gpt_column_mapping: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": "An unexpected error occurred",
+            "details": str(e)
         }), 500
