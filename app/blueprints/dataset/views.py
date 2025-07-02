@@ -3404,16 +3404,32 @@ def get_gpt_column_mapping(project_id):
         from app.utils.column_mapping import send_to_openai_assistant
         gpt_response = send_to_openai_assistant(input_data)
 
-        # Parse the stringified JSON if present
+        # After you get gpt_response from send_to_openai_assistant
         if gpt_response.get("status") == "success" and "response" in gpt_response:
             try:
-                gpt_response["response"] = json.loads(gpt_response["response"])
+                # Clean up the response string before parsing
+                response_str = gpt_response["response"]
+                if isinstance(response_str, str):
+                    response_str = response_str.strip()
+                    # Remove leading/trailing quotes if present
+                    if (response_str.startswith('"') and response_str.endswith('"')) or \
+                    (response_str.startswith("'") and response_str.endswith("'")):
+                        response_str = response_str[1:-1]
+                    # Replace escaped newlines and tabs
+                    response_str = response_str.replace('\\n', '').replace('\\t', '').replace('\n', '').replace('\t', '')
+                    # Remove double backslashes
+                    response_str = response_str.replace('\\\\', '\\')
+                    # Remove extra spaces
+                    response_str = response_str.strip()
+                # Parse to JSON
+                gpt_response["response"] = json.loads(response_str)
             except Exception as e:
                 logger.error(f"Failed to parse GPT response: {e}")
+                gpt_response["response"] = []
 
         return jsonify({
             "status": "success",
-            "gpt_response": gpt_response
+            "gpt_response": gpt_response["response"] if gpt_response.get("status") == "success" else gpt_response
         }), 200
 
     except Exception as e:
